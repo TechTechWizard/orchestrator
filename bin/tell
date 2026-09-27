@@ -1,0 +1,158 @@
+#!/bin/sh
+# tell — say something to a hired agent and make sure it actually arrived.
+#
+#   tell <agent-name> <text>
+#   tell -h | --help
+#
+# Why this exists: `herdr agent prompt` pastes the text into the agent's input
+# box, and the submit does not always land — the text sits there unsent and the
+# agent never sees it. That happened five times in one session, in both
+# directions (orchestrator -> agent, and the lead typing into a pane by hand).
+#
+# `prompt --wait` detects it: from a non-working state it requires an observed
+# state change within 5s and otherwise returns `agent_prompt_stalled`. So:
+#   1. prompt --wait --until working
+#   2. if it stalled, press Enter and check again
+#   3. if it still has not moved, say so loudly instead of assuming delivery
+#
+# An agent that is already `working` needs its own check. There `--until working` is
+# satisfied at once, so a clean return from `prompt --wait` proves nothing, and the old
+# code printed "delivered" on that return alone. Claude Code queues a message sent
+# mid-turn and shows it above the input box, so for a working agent tell compares the
+# pane before and after the send:
+#   - the text appears above the input box one more time than before: confirmed
+#   - the text is sitting in the input box: press Enter once and look again
+#   - neither, but state_change_seq moved and the box is free of the text: confirmed
+#   - otherwise: "not confirmed", exit 2, read the pane
+#
+# Never blindly re-prompt: that is how an agent gets the same task twice.
+#
+# Exit codes: 0 delivered or queued with proof · 1 usage or no such agent · 2 not
+# delivered, or delivery to a working agent not confirmed.
+
+set -eu
+
+# -h / --help prints this header: the protocols tell the orchestrator to run --help before
+# quoting a flag, so the header has to be reachable as help and not only as a comment.
+usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+name="${1:-}"
+shift 2>/dev/null || true
+text="${*:-}"
+
+case "$name" in
+    -h | --help) usage; exit 0 ;;
+    -*) echo "tell: unknown option $name (see: tell --help)" >&2; exit 1 ;;
+esac
+[ -n "$name" ] || { echo "usage: tell <agent-name> <text>   (see: roster)" >&2; exit 1; }
+[ -n "$text" ] || { echo "tell: nothing to say" >&2; exit 1; }
+
+command -v herdr >/dev/null 2>&1 || { echo "tell: herdr not on PATH" >&2; exit 1; }
+
+info_of() {
+    herdr agent get "$name" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    a = json.load(sys.stdin)["result"]["agent"]
+except Exception:
+    sys.exit(1)
+print(a.get("agent_status", "unknown"), a.get("state_change_seq", -1))
+' 2>/dev/null || echo "missing -1"
+}
+seq_of() { info_of | cut -d" " -f2; }
+
+# Where the text stands in the pane: how many times it shows above the input box, and
+# whether the input box holds it. The box is the line starting with the prompt glyph
+# right under a horizontal rule, as in await. Whitespace is collapsed on both sides, so
+# a wrapped line still matches, and only the first 40 characters are compared.
+where_is_text() {
+    herdr agent read "$name" --source recent-unwrapped --lines 80 2>/dev/null | python3 -c '
+import re, sys
+needle = " ".join(sys.argv[1].split())[:40]
+lines = sys.stdin.read().splitlines()
+RULE = re.compile(r"^[^\S\n]*─{8,}")
+PROMPT = re.compile(r"^[^\S\n]*❯")
+box = None
+for i in range(len(lines) - 1, 0, -1):
+    if PROMPT.match(lines[i]) and RULE.match(lines[i - 1]):
+        box = i
+        break
+above = lines if box is None else lines[:box - 1]
+inbox = []
+if box is not None:
+    for line in lines[box:]:
+        if inbox and RULE.match(line):
+            break
+        inbox.append(line)
+flat = lambda xs: " ".join(" ".join(xs).split())
+print(flat(above).count(needle), 1 if needle and needle in flat(inbox) else 0)
+' "$text" 2>/dev/null || echo "0 0"
+}
+
+set -- $(info_of)
+state=$1
+before=$2
+[ "$before" = "-1" ] && { echo "tell: no agent named $name (see: roster)" >&2; exit 1; }
+
+not_confirmed() {
+    echo "tell: $name was working; delivery NOT CONFIRMED — $1." >&2
+    echo "      Read the pane before doing anything else: herdr agent read $name --source recent --lines 40" >&2
+    echo "      Do not resend the text: if it is queued, the agent would get it twice." >&2
+    exit 2
+}
+
+if [ "$state" = "working" ]; then
+    set -- $(where_is_text)
+    seen_before=$1
+    herdr agent prompt "$name" "$text" >/dev/null 2>&1 || not_confirmed "herdr agent prompt failed"
+    enter=""
+    i=0
+    while [ "$i" -lt 5 ]; do
+        sleep 2
+        set -- $(where_is_text)
+        seen=$1
+        inbox=$2
+        if [ "$seen" -gt "$seen_before" ] && [ "$inbox" = "0" ]; then
+            echo "queued to a working agent $name, delivery confirmed by the text showing above its input box$enter"
+            exit 0
+        fi
+        after=$(seq_of)
+        if [ "$after" != "$before" ] && [ "$inbox" = "0" ]; then
+            echo "queued to a working agent $name, delivery confirmed by state_change_seq $before -> $after with its input box free of the text$enter"
+            exit 0
+        fi
+        if [ "$inbox" = "1" ] && [ -z "$enter" ]; then
+            # The paste landed and the submit did not. Press Enter once, never resend.
+            herdr agent send-keys "$name" Enter >/dev/null 2>&1 || true
+            enter=" (needed an explicit Enter)"
+        fi
+        i=$((i + 1))
+    done
+    if [ "$inbox" = "1" ]; then
+        not_confirmed "the text is still sitting in its input box after an explicit Enter"
+    fi
+    not_confirmed "the text shows neither above nor in its input box and state_change_seq stayed $before"
+fi
+
+# Not working: from idle or done, `prompt --wait` requires an observed state change within
+# 5s and otherwise returns agent_prompt_stalled, so its answer is the evidence here.
+out=$(herdr agent prompt "$name" "$text" --wait --until working --timeout 5000 2>&1 || true)
+
+case "$out" in
+    *agent_prompt_stalled* | *timeout*)
+        # The paste landed but the submit did not. Press Enter, do not resend text.
+        herdr agent send-keys "$name" Enter >/dev/null 2>&1 || true
+        sleep 3
+        after=$(seq_of)
+        if [ "$after" = "$before" ]; then
+            echo "tell: NOT DELIVERED to $name — text is sitting in its input box unsent." >&2
+            echo "      Check the pane: herdr agent read $name --source recent --lines 5" >&2
+            echo "      Then focus it and press Enter by hand: herdr agent focus $name" >&2
+            exit 2
+        fi
+        echo "delivered to $name (needed an explicit Enter)"
+        ;;
+    *)
+        echo "delivered to $name"
+        ;;
+esac

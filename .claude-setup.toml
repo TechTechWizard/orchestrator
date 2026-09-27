@@ -1,0 +1,5 @@
+# Configuration for the repository checker.
+#
+# The repository holds the `orchestrator` skill at the root, the five roles in agents/
+# and the six herdr wrappers in bin/. It is published for other people to install, so
+# the checks that keep personal and non-public data out of it are the ones that matter.

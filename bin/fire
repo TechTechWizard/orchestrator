@@ -1,0 +1,52 @@
+#!/bin/sh
+# fire — dismiss a hired agent: close its pane (and the tab if it was the last one).
+#
+#   fire <agent-name>        e.g. fire front-2
+#   fire -h | --help
+#
+# A worktree checkout created by `recruit --worktree` is NOT deleted — remove it
+# deliberately with `git -C <repo> worktree remove <checkout-path>` once its branch is
+# merged. `recruit` makes that checkout with git itself and puts the pane in the project
+# workspace, so there is no herdr worktree workspace and `herdr worktree remove` (which
+# takes a workspace id) has nothing to work on.
+
+set -eu
+
+# -h / --help prints this header: the protocols tell the orchestrator to run --help before
+# quoting a flag, so the header has to be reachable as help and not only as a comment.
+usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+name="${1:-}"
+case "$name" in
+    -h | --help) usage; exit 0 ;;
+    -*) echo "fire: unknown option $name (see: fire --help)" >&2; exit 1 ;;
+esac
+[ -n "$name" ] || { echo "usage: fire <agent-name>   (see: roster)" >&2; exit 1; }
+
+command -v herdr >/dev/null 2>&1 || { echo "fire: herdr not on PATH" >&2; exit 1; }
+
+info=$(herdr agent get "$name" 2>/dev/null) || { echo "fire: no agent named $name (see: roster)" >&2; exit 1; }
+
+pane=$(printf '%s' "$info" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+if "error" in data:
+    sys.exit("fire: %s" % data["error"])
+print(data["result"]["agent"]["pane_id"])
+')
+status=$(printf '%s' "$info" | python3 -c '
+import json, sys
+print(json.load(sys.stdin)["result"]["agent"].get("agent_status", "?"))
+')
+
+if [ "$status" = "working" ]; then
+    printf 'fire: %s is still working — kill it anyway? [y/N] ' "$name"
+    read -r answer
+    case "$answer" in
+        y | Y) ;;
+        *) echo "fire: cancelled"; exit 0 ;;
+    esac
+fi
+
+herdr pane close "$pane" >/dev/null
+echo "fired $name (pane $pane closed)"

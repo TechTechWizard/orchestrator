@@ -1,0 +1,196 @@
+#!/bin/sh
+# await — wait until an agent stops working, then say WHY it stopped.
+#
+#   await <agent-name> [--quiet] [--timeout <seconds>]
+#   await -h | --help
+#
+# Why this exists: a bare state watch tells you the agent left `working`, and
+# nothing else. But `idle` means three different things — finished, asked a
+# question and is waiting, or drifted and stopped — and treating them alike is
+# how an agent sits unanswered for an hour. This reads the tail of the pane and
+# classifies, so the notification says what is needed, not just "stopped".
+#
+# When the report ends with the closing line hire.md requires (СТАТУС: ГОТОВО, ЖДУ
+# РЕШЕНИЯ or БЛОКЕР) and the agent is done or idle, that line decides the verdict. Text
+# in the input box is then only mentioned, because after a finished turn Claude Code puts
+# an autosuggestion there that reads exactly like typed text. Without a closing line,
+# text in the box still means WAITING-ON-INPUT.
+#
+# It also raises a macOS notification, because a report nobody sees is the same
+# as no report. --quiet skips that.
+#
+# --timeout <seconds> gives up while the agent is still working: exit 5 and a line
+# saying so, instead of a verdict. It exists for a watcher run in the foreground of
+# a Claude Code Bash call, whose own ceiling is ten minutes — without it the harness
+# kills the watcher mid-wait and the agent's stop goes unclassified. Re-arm on exit 5.
+#
+# Exit codes: 0 DONE · 3 ASKING or WAITING-ON-INPUT · 4 BLOCKED · 5 still working
+# after --timeout · 1 anything else.
+
+set -eu
+
+# -h / --help prints this header: the protocols tell the orchestrator to run --help before
+# quoting a flag, so the header has to be reachable as help and not only as a comment.
+usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+name=""
+quiet=""
+timeout=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h | --help) usage; exit 0 ;;
+        --quiet)   quiet="--quiet"; shift ;;
+        --timeout) timeout="${2:-}"; [ -n "$timeout" ] || { echo "await: --timeout needs a number of seconds" >&2; exit 1; }; shift 2 ;;
+        -*)        echo "await: unknown option $1 (see: await --help)" >&2; exit 1 ;;
+        *)         [ -z "$name" ] || { echo "await: unexpected argument $1" >&2; exit 1; }; name="$1"; shift ;;
+    esac
+done
+[ -n "$name" ] || { echo "usage: await <agent-name> [--quiet] [--timeout <seconds>]   (see: roster)" >&2; exit 1; }
+command -v herdr >/dev/null 2>&1 || { echo "await: herdr not on PATH" >&2; exit 1; }
+
+status_of() {
+    herdr agent get "$name" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin)["result"]["agent"]["agent_status"])
+except Exception:
+    print("missing")
+' 2>/dev/null || echo "missing"
+}
+
+herdr agent get "$name" >/dev/null 2>&1 || { echo "await: no agent named $name" >&2; exit 1; }
+
+# Poll rather than `herdr agent wait`, so a vanished pane ends the watch too.
+# Without --timeout the ceiling is 12h (4320 polls of 10s).
+if [ -n "$timeout" ]; then
+    polls=$(( timeout / 10 ))
+    [ "$polls" -lt 1 ] && polls=1
+else
+    polls=4320
+fi
+i=0
+while [ "$i" -lt "$polls" ]; do
+    st=$(status_of)
+    case "$st" in
+        working) sleep 10 ;;
+        *) break ;;
+    esac
+    i=$((i + 1))
+done
+
+st=$(status_of)
+if [ "$st" = "working" ] && [ -n "$timeout" ]; then
+    echo "$name still working after ${timeout}s — re-arm: await $name --timeout $timeout"
+    exit 5
+fi
+
+# The classifier lives in a variable so that an offline test can pull it out from between
+# the two marker lines and feed it saved pane texts; keep the markers where they are.
+# classifier-begin
+classify='
+import re, sys
+
+state = sys.argv[1] if len(sys.argv) > 1 else ""
+lines = sys.stdin.read().splitlines()
+
+# `[^\S\n]` and not `\s`, or the whitespace class eats the newline and a pattern
+# anchored on one line matches across two of them.
+RULE = re.compile(r"^[^\S\n]*─{8,}")
+PROMPT = re.compile(r"^[^\S\n]*❯")
+FOOTER = re.compile(r"^[^\S\n]*[✻✽✶✳✢]")
+STATUS = re.compile(r"^[^\S\n]*(?:⏺[^\S\n]*)?СТАТУС:[^\S\n]*(ГОТОВО|ЖДУ РЕШЕНИЯ|БЛОКЕР)")
+
+# The input box is the last line starting with the prompt glyph that sits right under a
+# horizontal rule. A line starting with the glyph anywhere else is an earlier message in
+# the transcript. When the frame is not recognised, fall back to the last glyph line.
+box = None
+for i in range(len(lines) - 1, -1, -1):
+    if PROMPT.match(lines[i]) and i > 0 and RULE.match(lines[i - 1]):
+        box = i
+        break
+framed = box is not None
+if box is None:
+    for i in range(len(lines) - 1, -1, -1):
+        if PROMPT.match(lines[i]):
+            box = i
+            break
+
+if box is None:
+    report, box_text = lines, ""
+else:
+    body = [lines[box].split("❯", 1)[1]]
+    for line in lines[box + 1:]:
+        if RULE.match(line):
+            break
+        body.append(line)
+    box_text = " ".join(x.strip() for x in body).strip()
+    report = lines[:box - 1] if framed else lines[:box]
+pasted = "[pasted text" in (box_text if framed else "\n".join(lines)).lower()
+
+# The closing line hire.md demands: the last line of the report that is not blank and not
+# the turn footer Claude Code prints under it (the "✻ Crunched for 2m 32s" line).
+closing = None
+for line in reversed(report):
+    if not line.strip() or FOOTER.match(line):
+        continue
+    closing = STATUS.match(line) and line.strip().lstrip("⏺").strip()
+    break
+
+# Claude Code puts an autosuggestion into the input box after a turn ends: a guess at the
+# next message that nobody typed. herdr agent read returns it as plain text, the same as a
+# typed line, so the box alone cannot tell the two apart. A report that ends with its
+# closing status line and a pane that is done or idle can: the agent finished its turn,
+# and its own line says how. The box text is then only reported, never turned into a
+# verdict, and never quoted, so that a suggestion cannot be read as an answer from the lead.
+if state in ("done", "idle") and closing:
+    kind = {"ГОТОВО": "DONE", "ЖДУ РЕШЕНИЯ": "ASKING", "БЛОКЕР": "BLOCKED"}[STATUS.match(closing).group(1)]
+    why = "closing line: " + closing
+    if box_text or pasted:
+        why += " · text in input box, may be an autosuggestion — read the pane"
+    print(kind + "|" + why)
+    raise SystemExit
+
+# No closing line: text in the box is taken as unsent input, which is what it is after a
+# paste whose Enter did not land.
+if box_text or pasted:
+    print("WAITING-ON-INPUT|has unsent text in its input box — nobody pressed Enter")
+    raise SystemExit
+
+low = "\n".join(report).lower()
+asks = (
+    "скажи", "скажешь", "подтверди", "нужно ли", "заводить ли", "твое решение",
+    "твоё решение", "жду", "say yes", "your call", "confirm", "should i",
+    "прошу", "если скажешь", "по твоему слову",
+)
+blocks = (
+    "не могу", "блокер", "blocked", "permission", "denied", "не удалось",
+    "cannot", "failed to", "нет доступа", "требует",
+)
+
+if any(k in low for k in asks):
+    print("ASKING|finished and is waiting for a decision")
+elif any(k in low for k in blocks):
+    print("BLOCKED|stopped on something it could not do")
+else:
+    print("DONE|finished, no question raised")
+'
+# classifier-end
+
+verdict=$(herdr agent read "$name" --source recent --lines 60 2>/dev/null | python3 -c "$classify" "$st" 2>/dev/null || echo "UNKNOWN|could not read the pane")
+
+kind=${verdict%%|*}
+why=${verdict#*|}
+
+echo "$name stopped — state: $st | $kind: $why"
+
+if [ "$quiet" != "--quiet" ]; then
+    osascript -e "display notification \"$kind — $why\" with title \"$name\"" >/dev/null 2>&1 || true
+    herdr notification show "$name: $kind" --body "$why" --sound done >/dev/null 2>&1 || true
+fi
+
+case "$kind" in
+    DONE) exit 0 ;;
+    ASKING | WAITING-ON-INPUT) exit 3 ;;
+    BLOCKED) exit 4 ;;
+    *) exit 1 ;;
+esac
