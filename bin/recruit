@@ -332,7 +332,7 @@ if [ -n "$worktree" ]; then
 
     # A fresh checkout carries only tracked files, and on repositories whose .gitignore
     # ignores CLAUDE.md the agent's context is deliberately untracked; .claude/ (settings,
-    # skills, healthcheck config) is often not committed either. So a --worktree hire used
+    # skills, standards) is often not committed either. So a --worktree hire used
     # to start blind. Measured once on a smoke run: an agent hired
     # into such a worktree reported "no CLAUDE.md in the repository root" and worked without
     # the project's instructions. Copy the context over, never overwriting what the checkout

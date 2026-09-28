@@ -15,7 +15,7 @@ read code standards from. Absent both, it works to the defaults written in the p
 
 **Five roles** in `agents/` — `back`, `front`, `reviewer`, `tester`, `researcher` — as
 native Claude Code agent definitions. Each names the skill that is its craft
-(`implement-task`, `review-mr`, `clickup`, `project-healthcheck`) and pins its model.
+(`implement-task`, `review-mr`, `clickup`) and pins its model.
 `install.sh` links them into `~/.claude/agents/`, where both `recruit` and Claude Code
 read them.
 
@@ -42,7 +42,7 @@ Three things a developer does not need and a teamlead does:
 - **glab**, authenticated against your GitLab (`brew install glab`, then `glab auth login`).
   Only `await-mr` and the merge-request parts of the roles need it.
 - **The developer set**: the ClickUp CLI from
-  [claude-work-tools](https://github.com/TechTechWizard/claude-work-tools) and the seven
+  [claude-work-tools](https://github.com/TechTechWizard/claude-work-tools) and the six
   skills from [skills](https://github.com/TechTechWizard/skills). The roles call those
   skills by name, so install the developer set first, by its own READMEs.
 
