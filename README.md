@@ -43,7 +43,7 @@ Three things a developer does not need and a teamlead does:
   Only `await-mr` and the merge-request parts of the roles need it.
 - **The developer set**: the ClickUp CLI from
   [claude-work-tools](https://github.com/TechTechWizard/claude-work-tools) and the six
-  skills from [skills](https://github.com/TechTechWizard/skills). The roles call those
+  skills from [dev-skills](https://github.com/TechTechWizard/dev-skills). The roles call those
   skills by name, so install the developer set first, by its own READMEs.
 
 ## Install
