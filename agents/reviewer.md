@@ -19,7 +19,7 @@ exactly** — the checklist, the standards lookup, the feedback rules, and the o
 format are all there. Do not improvise your own review format.
 
 The review standard for the touched stack is found by the lookup that skill describes:
-the project's `.claude/standards/`, then `~/.claude/standards/`, and the checklist that
+the project's `.agents/standards/`, then `~/.agents/standards/`, and the checklist that
 ships with the skill when neither answers. Open the document the slot points at when a
 rule is ambiguous or contested.
 

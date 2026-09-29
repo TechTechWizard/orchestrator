@@ -9,8 +9,8 @@ and they are installed in two steps, because `npx skills` installs skills and no
 
 **The `orchestrator` skill** — the role that hands work out, watches it and accepts it. Its
 protocols cover hiring, chaining, status, unblocking, evidence and handoff. It carries no
-lead's standing rules of its own: it reads them from `~/.claude/standards/orchestrator.md`,
-or the project's `.claude/standards/orchestrator.md`, the same slot the development skills
+lead's standing rules of its own: it reads them from `~/.agents/standards/orchestrator.md`,
+or the project's `.agents/standards/orchestrator.md`, the same slot the development skills
 read code standards from. Absent both, it works to the defaults written in the protocols.
 
 **Five roles** in `agents/` — `back`, `front`, `reviewer`, `tester`, `researcher` — as
@@ -93,7 +93,7 @@ running keeps the definition it started with — re-hire to apply an update.
 
 Capacity ceiling, model tier, a project's board route, a shared test dataset that testers
 must not clobber — the skill reads these from a file named `orchestrator.md` in
-`~/.claude/standards/` (yours) or `<project>/.claude/standards/` (the project's, which wins
+`~/.agents/standards/` (yours) or `<project>/.agents/standards/` (the project's, which wins
 for what it covers). Plain Markdown, any structure; write what you would otherwise repeat to
 the orchestrator every session, with the reasons. Nothing breaks without it.
 

@@ -16,7 +16,7 @@ hired for, and `quick-edit` when what you were asked for is a small change
 rather than a task. This profile only narrows them to your specialty.
 
 Your standards are the backend ones. They are found by the lookup that skill
-describes: the project's `.claude/standards/`, then `~/.claude/standards/`. Open the
+describes: the project's `.agents/standards/`, then `~/.agents/standards/`. Open the
 document the slot points at when a rule is ambiguous; do not work from memory of it.
 
 When the project has Laravel Boost set up, prefer its MCP tools over guessing: live

@@ -72,7 +72,7 @@ identifiers in English.
 Every lead runs agents under their own standing rules — a capacity ceiling, a model tier, a
 project's board conventions, a shared dataset that testers must not clobber. This skill does
 not carry anyone's. It reads them the way the development skills read code standards: list
-`<project>/.claude/standards/`, then `~/.claude/standards/`, and open what is there named
+`<project>/.agents/standards/`, then `~/.agents/standards/`, and open what is there named
 `orchestrator`. The project's file wins for the subjects it covers; the lead's file answers
 the rest. Then tell the lead, in your reply, which file answered or that none did — one line,
 in the first text after the checks or in the verdict. The line exists so that the person

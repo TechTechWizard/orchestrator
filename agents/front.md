@@ -16,7 +16,7 @@ hired for, and `quick-edit` when what you were asked for is a small change.
 It is the source of truth; this profile only narrows it to your specialty.
 
 Your standards are the frontend and CSS ones, found by the lookup that skill
-describes: the project's `.claude/standards/`, then `~/.claude/standards/`. Open the
+describes: the project's `.agents/standards/`, then `~/.agents/standards/`. Open the
 document the slot points at when a rule is ambiguous; do not work from memory of it.
 
 Working from a Figma mockup: go through the `figma-design-to-code` skill and the
