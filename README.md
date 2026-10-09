@@ -2,8 +2,9 @@
 
 The teamlead set on top of the developer set: drive several Claude Code agents from
 [herdr](https://herdr.dev) panes, one role per pane, from one orchestrating session.
-Three things live here — the `orchestrator` skill, five roles, seven shell tools in `bin/` —
-and they are installed in two steps, because `npx skills` installs skills and nothing else.
+Three things live here — the `orchestrator` skill, five roles, seven shell tools —
+and all three ship inside the skill directory. `npx skills` installs them; a script that
+comes with them links the roles and the tools to where Claude Code and your shell look.
 
 ## What is here
 
@@ -13,13 +14,13 @@ lead's standing rules of its own: it reads them from `~/.agents/standards/orches
 or the project's `.agents/standards/orchestrator.md`, the same slot the development skills
 read code standards from. Absent both, it works to the defaults written in the protocols.
 
-**Five roles** in `agents/` — `back`, `front`, `reviewer`, `tester`, `researcher` — as
+**Five roles** in `orchestrator/agents/` — `back`, `front`, `reviewer`, `tester`, `researcher` — as
 native Claude Code agent definitions. Each names the skill that is its craft
 (`implement-task`, `review-mr`, `clickup`) and pins its model.
 `install.sh` links them into `~/.claude/agents/`, where both `recruit` and Claude Code
 read them.
 
-**Seven tools** in `bin/`, six of them wrappers over herdr:
+**Seven tools** in `orchestrator/bin/`, six of them wrappers over herdr:
 
 | Tool | What it does | Needs |
 |---|---|---|
@@ -51,24 +52,25 @@ Three things a developer does not need and a teamlead does:
 
 ## Install
 
-Step one, the skill:
+Two commands, no clone:
 
 ```sh
 npx skills add TechTechWizard/orchestrator -g -a claude-code -s orchestrator
+sh ~/.claude/skills/orchestrator/install.sh
 ```
 
-Step two, the roles and the wrappers:
+The first installs the skill with its roles and wrappers. The second links the wrappers into
+`~/.local/bin` and the roles into `~/.claude/agents/`, then reports the prerequisites. The
+links point at `~/.claude/skills/orchestrator`, which exists whether you installed for Claude
+Code only or, without `-a claude-code`, for several agents at once. A missing herdr makes it
+exit non-zero: the links are in place, but nothing here works yet. It refuses to run while
+`~/.claude/agents` is itself a symbolic link into some repository — make it a directory
+first. `BIN_DIR` and `AGENTS_DIR` move the targets; `--check` reports without touching
+anything.
 
-```sh
-git clone https://github.com/TechTechWizard/orchestrator.git ~/src/orchestrator
-cd ~/src/orchestrator && ./install.sh
-```
-
-`install.sh` links `bin/*` into `~/.local/bin` and `agents/*.md` into `~/.claude/agents/`,
-then reports the prerequisites. A missing herdr makes it exit non-zero: the links are in
-place, but nothing here works yet. It refuses to run while `~/.claude/agents` is itself a
-symbolic link into some repository — make it a directory first. `BIN_DIR` and `AGENTS_DIR`
-move the targets; `./install.sh --check` reports without touching anything.
+Installed from a clone before? Run the same two commands. `install.sh` relinks every link
+that still points into the clone, leaves your own files in `~/.claude/agents` alone, and
+after that the clone is no longer used.
 
 ## Check that it worked
 
@@ -84,12 +86,12 @@ things before its first hire and stops with the step to repeat if one is missing
 ## Update
 
 ```sh
-npx skills update                          # the skill
-cd ~/src/orchestrator && git pull && ./install.sh --check   # the roles and the wrappers
+npx skills update
 ```
 
-The links point into the checkout, so `git pull` alone updates the roles and the
-wrappers; `--check` catches a new file that needs a new link. A role that is already
+The links point into the installed skill, so the roles and the wrappers are new the moment
+the skill is, with no second step. Only a release that adds a wrapper or a role needs
+`sh ~/.claude/skills/orchestrator/install.sh` again; `--check` tells. A role that is already
 running keeps the definition it started with — re-hire to apply an update.
 
 ## Your standing rules go into the slot
@@ -131,7 +133,7 @@ again; the log is in `~/.local/state/await-validation/`. `await-validation --hel
 
 A role is a native Claude Code agent definition, and `recruit` accepts it from either of
 two places: a file in `~/.claude/agents/<role>.md` — which is where `install.sh` links
-this repository's five — or an installed plugin that ships an `agents/` directory, listed
+the skill's five — or an installed plugin that ships an `agents/` directory, listed
 as `<plugin>:<role>`. `recruit --roles` prints every role it can see and where each one
 comes from. A bare name works when exactly one definition answers to it; when two do,
 `recruit` refuses and prints both spellings.

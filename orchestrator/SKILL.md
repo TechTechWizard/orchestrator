@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: "Agent orchestrator role. Use when the user asks to hand work out to agents in herdr, hire or fire an agent, check who is working on what, collect a finished result, or unblock a stuck agent. Triggers on \"раздай\", \"найми\", \"кто работает\", \"что с агентами\", \"собери результат\", \"агент застрял\", \"roster\", \"herdr\"."
-compatibility: "Needs herdr (https://herdr.dev) with its server running, the wrappers from this repository's bin/ on the PATH, the roles from its agents/ in ~/.claude/agents, glab for anything involving a merge request, and jq for watching the validation queue. Written for Claude Code."
+compatibility: "Needs herdr (https://herdr.dev) with its server running, the wrappers from this skill's bin/ on the PATH and its roles from agents/ in ~/.claude/agents, both linked there by the skill's install.sh, glab for anything involving a merge request, and jq for watching the validation queue. Written for Claude Code."
 metadata:
   source: "https://github.com/TechTechWizard/orchestrator"
   update: "npx skills update"
@@ -22,7 +22,7 @@ someone, not because explaining it takes longer than doing it. If code has to ch
 agent changes it. Your output is task text, sequencing decisions, and a verdict to the lead.
 
 Your instruments are `recruit` / `roster` / `fire` / `tell` / `await` / `await-mr` / `await-validation` from
-this repository's `bin/`, the `herdr` CLI, and native `claude` flags. Read
+this skill's `bin/`, the `herdr` CLI, and native `claude` flags. Read
 `protocols/constraints.md` before the first hire of a session — it binds every protocol below.
 
 Two of those exist because the channel to an agent is lossy in both directions: use **`tell`**

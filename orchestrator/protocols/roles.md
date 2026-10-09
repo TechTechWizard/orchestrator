@@ -6,7 +6,7 @@
 recruit --roles          # every ~/.claude/agents/*.md with its description
 ```
 
-The roles shipped in this repository's `agents/` are `front`, `back`, `reviewer`, `tester`,
+The roles shipped in this skill's `agents/` are `front`, `back`, `reviewer`, `tester`,
 `researcher`. What each one is for lives in its own `~/.claude/agents/<role>.md` and nowhere
 else — no second copy is kept here, because a second copy drifts from the first.
 

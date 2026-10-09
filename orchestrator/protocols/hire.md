@@ -228,4 +228,4 @@ Don't — call `recruit`. It exists because of two traps: a pane reports `agent_
 for seconds after `tab create` even when its foreground process is a clean zsh, and a
 readiness probe returns instantly so retrying on it burns every attempt inside one second.
 The fix is a retry loop with a **real** pause; `recruit` blocks ~1.2s by waiting for output
-that never arrives. Read `bin/recruit` in this repository before writing anything of your own.
+that never arrives. Read this skill's `bin/recruit` before writing anything of your own.

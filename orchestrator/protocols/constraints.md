@@ -5,16 +5,17 @@ first hire. All of them were paid for in practice.
 
 ## 0. The second half of the installation has to be there
 
-The skill arrives with `npx skills`; the wrappers and the roles arrive with `install.sh`
-from the same repository, and nothing makes a person run both. Before the first hire:
+The skill arrives with `npx skills` and carries the wrappers in its `bin/` and the roles in
+its `agents/`, but they work only once `install.sh` from the skill directory has linked them
+into place — and nothing makes a person run it. Before the first hire:
 
 ```sh
 command -v recruit                      # the wrappers are on the PATH
 ls ~/.claude/agents/*.md                # the roles are where recruit and Claude Code read them
 ```
 
-Either one missing means the second step of the repository's README was skipped. Stop
-and say which step, with its two commands — do not hire by hand around it
+Either one missing means the second step of the README was skipped. Stop and name it,
+`sh ~/.claude/skills/orchestrator/install.sh` — do not hire by hand around it
 (`protocols/hire.md` says why), and do not write a role of your own to fill the gap.
 
 ## 1. The herdr server must start from a clean shell — so you can never start it
@@ -124,7 +125,7 @@ flag files with an allow-list, `--append-system-prompt-file`. All of it is gone,
 
 Two `recruit` runs in the same window both compute `tester-1`. `recruit` recomputes the
 number on every `agent start` attempt and renames the pane if someone took it — see
-`bin/recruit` in this repository. Any automation you write must do the same or it will collide.
+this skill's `bin/recruit`. Any automation you write must do the same or it will collide.
 
 ## 7. Every role pins its model, and a hire can be two sessions
 
