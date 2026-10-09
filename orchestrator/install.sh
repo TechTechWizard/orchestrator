@@ -7,14 +7,15 @@
 #
 # The wrappers and the roles ship inside the skill, so `npx skills add` brings them and
 # `npx skills update` replaces them. The links point at the installed skill through
-# ~/.claude/skills/orchestrator: a Claude Code-only install keeps the skill there, an
-# install for several agents keeps it in ~/.agents/skills and links it there, and the
-# path is the same either way. That is why an update needs no second run of this script,
-# and why it does not link to wherever this copy of the script happens to sit.
+# ~/.claude/skills/orchestrator, which npx skills fills for Claude Code whatever it does
+# underneath — a copy there, or a link to its copy in ~/.agents/skills, depending on its
+# version and on which agents the skill was installed for. That is why an update needs no
+# second run of this script, and why it does not link to wherever this copy of the script
+# happens to sit.
 #
 # A link left by the old layout, pointing into a git checkout, is relinked here. A file
-# of your own in ~/.claude/agents under another name is never touched; one under a role's
-# name is kept as a backup before the link replaces it.
+# of your own in ~/.claude/agents under another name is never touched; a file or a link of
+# your own under a role's name is kept as a backup before the link replaces it.
 
 set -eu
 
@@ -35,6 +36,17 @@ fi
 changed=0
 note() { printf '%s\n' "$*"; }
 
+# A link is ours to replace when it is dangling, or when it points at agents/<file> or
+# bin/<file> of an orchestrator skill or of a checkout that holds one — the layout before
+# the roles and the wrappers moved inside the skill.
+is_ours() {
+    target=$(readlink "$1")
+    [ -e "$1" ] || return 0
+    case "$target" in /*) ;; *) target="$(dirname "$1")/$target" ;; esac
+    owner=$(dirname "$(dirname "$target")")
+    [ -f "$owner/SKILL.md" ] || [ -f "$owner/orchestrator/SKILL.md" ]
+}
+
 link_one() {
     src="$1"
     dst="$2"
@@ -51,8 +63,9 @@ link_one() {
         fi
         return 0
     fi
-    # An existing regular file is somebody's own copy; keep it rather than destroy it.
-    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+    # An existing regular file is somebody's own copy, and a link to anywhere but this
+    # skill or a checkout of it is somebody's own role; keep either rather than destroy it.
+    if { [ -e "$dst" ] && [ ! -L "$dst" ]; } || { [ -L "$dst" ] && ! is_ours "$dst"; }; then
         backup="$dst.backup-$(date +%Y%m%d-%H%M%S)"
         mv "$dst" "$backup"
         note "kept     $(basename "$dst") as $(basename "$backup")"
