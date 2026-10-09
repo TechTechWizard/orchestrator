@@ -1,25 +1,36 @@
 #!/bin/sh
 # install.sh — link the herdr wrappers into ~/.local/bin and the roles into ~/.claude/agents.
 #
-#   ./install.sh            link everything, report what changed
-#   ./install.sh --check    report what would change, touch nothing
-#   BIN_DIR=/somewhere ./install.sh     link into a different directory
+#   sh ~/.claude/skills/orchestrator/install.sh            link everything, report what changed
+#   sh ~/.claude/skills/orchestrator/install.sh --check    report what would change, touch nothing
+#   BIN_DIR=/somewhere sh .../install.sh                   link into a different directory
 #
-# Links rather than copies, so `git pull` in this checkout updates the installed
-# tools with no second step. That is also why the checkout has to stay where it is:
-# move it and the links break. The roles are linked the same way, one link per file,
-# so `git pull` updates them too — and the agent that reads its definition at start
-# keeps the old one until it is re-hired.
+# The wrappers and the roles ship inside the skill, so `npx skills add` brings them and
+# `npx skills update` replaces them. The links point at the installed skill through
+# ~/.claude/skills/orchestrator: a Claude Code-only install keeps the skill there, an
+# install for several agents keeps it in ~/.agents/skills and links it there, and the
+# path is the same either way. That is why an update needs no second run of this script,
+# and why it does not link to wherever this copy of the script happens to sit.
+#
+# A link left by the old layout, pointing into a git checkout, is relinked here. A file
+# of your own in ~/.claude/agents under another name is never touched; one under a role's
+# name is kept as a backup before the link replaces it.
 
 set -eu
 
-REPO_DIR=$(cd "$(dirname "$0")" && pwd)
+SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/orchestrator}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 AGENTS_DIR="${AGENTS_DIR:-$HOME/.claude/agents}"
 CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
 TOOLS="recruit roster fire tell await await-mr await-validation"
+
+if [ ! -f "$SKILL_DIR/SKILL.md" ] || [ ! -d "$SKILL_DIR/bin" ] || [ ! -d "$SKILL_DIR/agents" ]; then
+    echo "install.sh: no orchestrator skill at $SKILL_DIR — install it first:" >&2
+    echo "  npx skills add TechTechWizard/orchestrator -g -a claude-code -s orchestrator" >&2
+    exit 1
+fi
 
 changed=0
 note() { printf '%s\n' "$*"; }
@@ -62,18 +73,18 @@ fi
 mkdir -p "$AGENTS_DIR"
 
 for tool in $TOOLS; do
-    [ -f "$REPO_DIR/bin/$tool" ] || { echo "install.sh: $REPO_DIR/bin/$tool is missing" >&2; exit 1; }
-    chmod +x "$REPO_DIR/bin/$tool"
-    link_one "$REPO_DIR/bin/$tool" "$BIN_DIR/$tool"
+    [ -f "$SKILL_DIR/bin/$tool" ] || { echo "install.sh: $SKILL_DIR/bin/$tool is missing" >&2; exit 1; }
+    [ -x "$SKILL_DIR/bin/$tool" ] || { echo "install.sh: $SKILL_DIR/bin/$tool is not executable — reinstall the skill" >&2; exit 1; }
+    link_one "$SKILL_DIR/bin/$tool" "$BIN_DIR/$tool"
 done
 
-for role in "$REPO_DIR"/agents/*.md; do
-    link_one "$role" "$AGENTS_DIR/$(basename "$role")"
+for role in "$SKILL_DIR"/agents/*.md; do
+    link_one "$SKILL_DIR/agents/$(basename "$role")" "$AGENTS_DIR/$(basename "$role")"
 done
 
 note ""
 if [ "$CHECK" = "1" ]; then
-    [ "$changed" = "0" ] && note "everything is linked" || note "$changed link(s) would change — run ./install.sh"
+    [ "$changed" = "0" ] && note "everything is linked" || note "$changed link(s) would change — run it without --check"
     exit 0
 fi
 [ "$changed" = "0" ] && note "everything was already linked" || note "$changed link(s) updated"
@@ -116,14 +127,8 @@ else
     note "  MISS  clickup — install the developer set first: https://github.com/TechTechWizard/claude-work-tools"
 fi
 
-if [ -f "$HOME/.claude/skills/orchestrator/SKILL.md" ]; then
-    note "  ok    the orchestrator skill is installed"
-else
-    note "  MISS  the orchestrator skill — npx skills add TechTechWizard/orchestrator -g -a claude-code -s orchestrator"
-fi
-
 if [ "$missing" = "1" ]; then
     note ""
-    note "Not usable yet: herdr is missing. The links are in place; install herdr and run ./install.sh --check."
+    note "Not usable yet: herdr is missing. The links are in place; install herdr and run this script again with --check."
     exit 1
 fi
