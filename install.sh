@@ -19,7 +19,7 @@ AGENTS_DIR="${AGENTS_DIR:-$HOME/.claude/agents}"
 CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
-TOOLS="recruit roster fire tell await await-mr"
+TOOLS="recruit roster fire tell await await-mr await-validation"
 
 changed=0
 note() { printf '%s\n' "$*"; }
@@ -99,9 +99,15 @@ else
 fi
 
 if command -v glab >/dev/null 2>&1; then
-    note "  ok    glab — await-mr can watch merge requests"
+    note "  ok    glab — await-mr and await-validation can watch GitLab"
 else
-    note "  MISS  glab — only await-mr needs it (brew install glab, then glab auth login)"
+    note "  MISS  glab — only await-mr and await-validation need it (brew install glab, then glab auth login)"
+fi
+
+if command -v jq >/dev/null 2>&1; then
+    note "  ok    jq — await-validation can read GitLab's answers"
+else
+    note "  MISS  jq — only await-validation needs it (brew install jq)"
 fi
 
 if command -v clickup >/dev/null 2>&1; then

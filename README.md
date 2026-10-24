@@ -2,7 +2,7 @@
 
 The teamlead set on top of the developer set: drive several Claude Code agents from
 [herdr](https://herdr.dev) panes, one role per pane, from one orchestrating session.
-Three things live here — the `orchestrator` skill, five roles, six wrappers over herdr —
+Three things live here — the `orchestrator` skill, five roles, seven shell tools in `bin/` —
 and they are installed in two steps, because `npx skills` installs skills and nothing else.
 
 ## What is here
@@ -19,7 +19,7 @@ native Claude Code agent definitions. Each names the skill that is its craft
 `install.sh` links them into `~/.claude/agents/`, where both `recruit` and Claude Code
 read them.
 
-**Six wrappers** over herdr in `bin/`:
+**Seven tools** in `bin/`, six of them wrappers over herdr:
 
 | Tool | What it does | Needs |
 |---|---|---|
@@ -29,8 +29,10 @@ read them.
 | `tell` | Send text to an agent — safer than `herdr agent prompt`, which can paste without submitting and lose the message | herdr |
 | `await` | Wait for an agent and tell apart the three states herdr shows identically: finished, asked a question, drifted | herdr |
 | `await-mr` | The same wait, tied to a merge request appearing | herdr, glab |
+| `await-validation` | Wait until an issue in validation or a merge request is assigned to you, and say which | glab, jq |
 
-None of them does anything without herdr installed and its server running.
+All but `await-validation` do nothing without herdr installed and its server running;
+`await-validation` only reads GitLab, and the hiring it leads to goes through herdr.
 
 ## Before you install
 
@@ -40,7 +42,8 @@ Three things a developer does not need and a teamlead does:
   its absence as a stop, not a warning. Its server has to be started from a real terminal,
   never from a shell Claude Code spawned — the skill explains why in its first constraint.
 - **glab**, authenticated against your GitLab (`brew install glab`, then `glab auth login`).
-  Only `await-mr` and the merge-request parts of the roles need it.
+  Only `await-mr`, `await-validation` and the merge-request parts of the roles need it.
+- **jq** (`brew install jq`), for `await-validation` only.
 - **The developer set**: the ClickUp CLI from
   [claude-work-tools](https://github.com/TechTechWizard/claude-work-tools) and the six
   skills from [dev-skills](https://github.com/TechTechWizard/dev-skills). The roles call those
@@ -96,6 +99,33 @@ must not clobber — the skill reads these from a file named `orchestrator.md` i
 `~/.agents/standards/` (yours) or `<project>/.agents/standards/` (the project's, which wins
 for what it covers). Plain Markdown, any structure; write what you would otherwise repeat to
 the orchestrator every session, with the reasons. Nothing breaks without it.
+
+## Watching your validation queue
+
+Tell the orchestrator «следи» (or "watch my queue") in a project's root, and whatever is
+assigned to you for validation or review gets an agent without you asking: issues with the
+status label once their merge is deployed, and open merge requests. The waiting is done by
+`await-validation`, which polls GitLab every 15 minutes and costs nothing while the queue is
+empty; the session has to stay open, because the watcher lives in it. GitLab only —
+validation statuses in ClickUp are not supported and will not be.
+
+Set it up once per project in `<project>/.agents/standards/orchestrator.md`: the command with
+your repositories, plus who gets what (which stand a tester checks, what to do with an issue
+on a document). Without that file the orchestrator asks once which repositories to watch.
+
+```sh
+await-validation \
+  --project <group>/<backend-repo> \
+  --project <group>/<frontend-repo> \
+  --label VALIDATION --env development      # the defaults; pass them only when yours differ
+```
+
+Run it from a git checkout whose remote is on the same GitLab host — `glab` takes the host
+from there. Before the first «следи», add `--dry-run` to see every item it finds and whether
+it is `new`, `seen` or `not-deployed`; it writes nothing. What has been handed out is kept in
+`.orchestrator/validation-seen` in the project root — add `.orchestrator/` to the checkout's
+`.git/info/exclude` so it stays out of commits, and delete a line to have that item checked
+again; the log is in `~/.local/state/await-validation/`. `await-validation --help` has the rest.
 
 ## Roles: where `recruit` finds them
 

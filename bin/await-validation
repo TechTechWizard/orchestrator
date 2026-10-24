@@ -1,0 +1,162 @@
+#!/bin/sh
+# await-validation — wait until something lands on you for validation or review, then say what.
+#
+#   await-validation --project <group/repo> [--project ...] [--label VALIDATION]
+#                    [--env development] [--interval 900] [--state <file>]
+#   await-validation ... --dry-run      one scan, print every item and its state, write nothing
+#   await-validation -h | --help
+#
+# Watches two things in each project, both assigned to you (the glab user):
+#   - open issues with the status label (--label) — printed as  VALIDATE <project> #<iid> <url> <title>
+#   - open merge requests                         — printed as  REVIEW   <project> !<iid> <url> <title>
+# and exits 0 on the first scan that finds anything new, printing every new item at once.
+#
+# "New" is remembered in --state (default .orchestrator/validation-seen in the current
+# directory): an issue is new again when the label is added to it again or it is assigned
+# to you again — the second is how work comes back when the label stays put while somebody
+# fixes it. A merge request is new again when its head commit changes. Delete a line from
+# the file to see it again.
+#
+# GitLab only. ClickUp statuses are not watched and will not be.
+#
+# An issue is held back until the merge commits of its merged merge requests are on the
+# deployment of --env in that project: validating before the deploy checks the old code.
+# A project without that environment, or an issue without a merged merge request, is not held.
+#
+# Exits 2 after three scans in a row fail to reach GitLab, so a dead token does not look
+# like an empty queue. Run it from a directory whose git remote is on the GitLab host:
+# glab resolves the host from there. Progress goes to ~/.local/state/await-validation/.
+
+set -u  # no -e: GitLab failures are counted by api(), an empty jq result is not an error
+
+usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+projects=""; label="VALIDATION"; env="development"; interval=900
+state=".orchestrator/validation-seen"; dry=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h | --help) usage; exit 0 ;;
+        --project)   projects="$projects ${2:?}"; shift 2 ;;
+        --label)     label="${2:?}"; shift 2 ;;
+        --env)       env="${2:?}"; shift 2 ;;
+        --interval)  interval="${2:?}"; shift 2 ;;
+        --state)     state="${2:?}"; shift 2 ;;
+        --dry-run)   dry=1; shift ;;
+        *)           echo "await-validation: unknown option $1" >&2; exit 1 ;;
+    esac
+done
+
+[ -n "$projects" ] || { echo "await-validation: at least one --project is required" >&2; exit 1; }
+command -v glab >/dev/null || { echo "await-validation: glab is required (brew install glab, then glab auth login)" >&2; exit 1; }
+command -v jq >/dev/null || { echo "await-validation: jq is required (brew install jq)" >&2; exit 1; }
+
+logdir="$HOME/.local/state/await-validation"
+mkdir -p "$logdir"
+log="$logdir/$(basename "$PWD").log"
+say() { echo "$(date '+%d.%m %H:%M:%S')  $*" >> "$log"; }
+
+[ "$dry" = 1 ] || { mkdir -p "$(dirname "$state")"; touch "$state"; }
+failflag=$(mktemp); trap 'rm -f "$failflag"' EXIT
+
+enc() { printf '%s' "$1" | jq -sRr @uri; }
+
+# glab api that records a failure instead of passing an empty answer off as an empty queue.
+api() {
+    if ! r=$(glab api "$1" 2>>"$log"); then echo "$1" >> "$failflag"; echo 'null'; return 0; fi
+    printf '%s\n' "$r"
+}
+
+# Prints the deployed sha of $env in project $1, or nothing when there is no such environment.
+deployed_sha() {
+    eid=$(api "projects/$1/environments?name=$env" | jq -r '.[0].id // empty')
+    [ -n "$eid" ] || return 0
+    api "projects/$1/environments/$eid" | jq -r '.last_deployment.sha // "none"'
+}
+
+# 0 when every merged merge request of issue $2 is contained in sha $3 of project $1.
+# Related merge requests may come from other projects (a spec MR in the docs repository),
+# and their commits are not in this one, so only the issue's own project counts.
+deployed() {
+    pid=$(api "projects/$1" | jq -r '.id? // empty')
+    for m in $(api "projects/$1/issues/$2/related_merge_requests" \
+            | jq -r --argjson pid "${pid:-0}" '.[]? | select(.state=="merged" and .project_id==$pid)
+                | (.squash_commit_sha // .merge_commit_sha // .sha)'); do
+        [ "$3" != "none" ] || return 1
+        base=$(api "projects/$1/repository/merge_base?refs%5B%5D=$m&refs%5B%5D=$3" | jq -r '.id? // empty')
+        [ "$base" = "$m" ] || return 1
+    done
+    return 0
+}
+
+seen() { grep -qxF "$1" "$state" 2>/dev/null; }
+
+# One scan: a line "<new|seen|not-deployed>\t<state key>\t<item>" per item. Failures land in $failflag.
+scan() {
+    me=$(api user | jq -r '.username? // empty')
+    [ -n "$me" ] || return 0
+    for p in $projects; do
+        ep=$(enc "$p")
+        dep=$(deployed_sha "$ep")
+
+        api "projects/$ep/issues?state=opened&labels=$(enc "$label")&assignee_username=$me&per_page=100" \
+            | jq -r '.[]? | "\(.iid)\t\(.web_url)\t\(.title)"' |
+        while IFS="$(printf '\t')" read -r iid url title; do
+            labeled=$(api "projects/$ep/issues/$iid/resource_label_events?per_page=100" \
+                | jq -r --arg l "$label" '[.[]? | select(.action=="add" and .label.name==$l)] | last | .id // 0')
+            # GitLab's own system note, "assigned to @a and unassigned @b": only the part
+            # before "unassigned" says who got the issue.
+            assigned=$(api "projects/$ep/issues/$iid/notes?sort=desc&per_page=100" \
+                | jq -r --arg me "$me" '[.[]? | select(.system)
+                    | select(.body | split(" and unassigned")[0] | test("^assigned to .*@" + $me + "\\b"))][0].id // 0')
+            key="issue $p $iid $labeled:$assigned"
+            if seen "$key"; then st=seen
+            elif [ -n "$dep" ] && ! deployed "$ep" "$iid" "$dep"; then st=not-deployed
+            else st=new; fi
+            printf '%s\t%s\t%s\n' "$st" "$key" "VALIDATE $p #$iid $url $title"
+        done
+
+        api "projects/$ep/merge_requests?state=opened&assignee_username=$me&per_page=100" \
+            | jq -r '.[]? | "\(.iid)\t\(.sha)\t\(.web_url)\t\(.title)"' |
+        while IFS="$(printf '\t')" read -r iid sha url title; do
+            key="mr $p $iid $sha"
+            if seen "$key"; then st=seen; else st=new; fi
+            printf '%s\t%s\t%s\n' "$st" "$key" "REVIEW $p !$iid $url $title"
+        done
+    done
+}
+
+if [ "$dry" = 1 ]; then
+    scan | cut -f1,3
+    [ ! -s "$failflag" ] || { echo "GitLab calls failed:" >&2; cat "$failflag" >&2; exit 2; }
+    exit 0
+fi
+
+say "watching$projects — label $label, env $env, every ${interval}s, state $state"
+fails=0
+while : ; do
+    : > "$failflag"
+    result=$(scan)
+    if [ -s "$failflag" ]; then
+        fails=$((fails + 1))
+        say "scan $fails failed: $(tr '\n' ' ' < "$failflag")"
+        if [ "$fails" -ge 3 ]; then
+            echo "GITLAB-UNREACHABLE three scans in a row failed — see $log"
+            exit 2
+        fi
+    else
+        fails=0
+        printf '%s\n' "$result" | awk -F'\t' '$1=="not-deployed" {print $2}' | while read -r k; do
+            say "waits for the $env deploy: $k"
+        done
+        new=$(printf '%s\n' "$result" | awk -F'\t' '$1=="new"')
+        if [ -n "$new" ]; then
+            printf '%s\n' "$new" | cut -f2 >> "$state"
+            printf '%s\n' "$new" | cut -f3
+            say "new items: $(printf '%s\n' "$new" | wc -l | tr -d ' ') — done watching"
+            exit 0
+        fi
+        say "nothing new"
+    fi
+    sleep "$interval"
+done

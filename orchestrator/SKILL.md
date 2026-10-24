@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: "Agent orchestrator role. Use when the user asks to hand work out to agents in herdr, hire or fire an agent, check who is working on what, collect a finished result, or unblock a stuck agent. Triggers on \"раздай\", \"найми\", \"кто работает\", \"что с агентами\", \"собери результат\", \"агент застрял\", \"roster\", \"herdr\"."
-compatibility: "Needs herdr (https://herdr.dev) with its server running, the wrappers from this repository's bin/ on the PATH, the roles from its agents/ in ~/.claude/agents, and glab for anything involving a merge request. Written for Claude Code."
+compatibility: "Needs herdr (https://herdr.dev) with its server running, the wrappers from this repository's bin/ on the PATH, the roles from its agents/ in ~/.claude/agents, glab for anything involving a merge request, and jq for watching the validation queue. Written for Claude Code."
 metadata:
   source: "https://github.com/TechTechWizard/orchestrator"
   update: "npx skills update"
@@ -21,7 +21,7 @@ You do **not** write product code. Not one line — not "just a quick fix", not 
 someone, not because explaining it takes longer than doing it. If code has to change, an
 agent changes it. Your output is task text, sequencing decisions, and a verdict to the lead.
 
-Your instruments are `recruit` / `roster` / `fire` / `tell` / `await` / `await-mr` from
+Your instruments are `recruit` / `roster` / `fire` / `tell` / `await` / `await-mr` / `await-validation` from
 this repository's `bin/`, the `herdr` CLI, and native `claude` flags. Read
 `protocols/constraints.md` before the first hire of a session — it binds every protocol below.
 
@@ -91,7 +91,7 @@ rules.
 |----------|----------|------|
 | Constraints | before any hire, capacity, herdr server, glab, native-first | protocols/constraints.md |
 | Hire | delegate, найми, раздай, give this to an agent, task text | protocols/hire.md |
-| Pipeline | chain, unattended, after the merge, await-mr, sequence | protocols/pipeline.md |
+| Pipeline | chain, unattended, after the merge, await-mr, sequence, следи, watch my queue, await-validation | protocols/pipeline.md |
 | Status | who is working, что с агентами, roster, snapshot, transcript | protocols/status.md |
 | Unblock | blocked, stuck, застрял, lost the task, restart it | protocols/unblock.md |
 | Evidence | what an agent leaves behind, folder layout, screenshots, handover, archive | protocols/reports.md |

@@ -191,6 +191,38 @@ check there when nothing seems to be happening. It sleeps in a loop, so run it d
 Two watchers that fire in the same window will both try to claim the same agent number —
 `protocols/constraints.md`.
 
+## Watching the lead's queue
+
+When the lead says «следи» or "watch my queue", they mean: whatever lands on them for
+validation or review gets an agent without them asking.
+It watches GitLab only; validation statuses in ClickUp are not supported and will not be.
+
+```sh
+await-validation --project <group/repo> [--project ...] [--label VALIDATION] [--env development]
+```
+
+The projects, the status label and the environment come from the project's slot file
+`orchestrator`; when it names none, ask the lead once which repositories to watch. Run it
+detached with `run_in_background` — it polls GitLab every 15 minutes for free and exits on the
+first scan that finds something new, printing every new item at once:
+
+- `VALIDATE <project> #<iid> <url> <title>` — an issue with the status label assigned to the
+  lead, already deployed to the environment. Hire `tester` on the environment, not on a local
+  run; a ticket on a document goes to whoever the slot file names for it.
+- `REVIEW <project> !<iid> <url> <title>` — a merge request assigned to the lead. Hire
+  `reviewer` with the `review-mr` skill.
+
+Then, in the same turn, **re-arm the watcher** — a fired watcher that is not re-armed is a
+queue nobody watches. An item is printed once: the watcher records it in
+`.orchestrator/validation-seen` and prints it again only after the label is added to the
+issue again, the issue is assigned to the lead again, or the merge request gets a new head
+commit. Anything over the capacity ceiling therefore waits in your own
+queue in the run-context file, not in the watcher; hire from it as slots free. Exit 2 means
+GitLab stopped answering — say so to the lead instead of re-arming in silence.
+
+Every verdict goes to the lead in the session, the usual three lines with evidence in files.
+Nothing goes to GitLab — no comment, no label, no reassignment — before the lead's yes.
+
 ## Testers share one stand, and often one dataset
 
 Two testers on the same dev stand see each other's data, and a project that seeds test
