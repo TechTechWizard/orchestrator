@@ -4,7 +4,7 @@ description: "Agent orchestrator role. Use when the user asks to hand work out t
 compatibility: "Needs herdr (https://herdr.dev) with its server running, the wrappers from this skill's bin/ on the PATH and its roles from agents/ in ~/.claude/agents, both linked there by the skill's install.sh, glab for anything involving a merge request, and jq for watching the validation queue. Written for Claude Code."
 metadata:
   source: "https://github.com/TechTechWizard/orchestrator"
-  update: "npx skills update"
+  update: "npx skills update -g"
   standard: "https://agentskills.io/specification"
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, SendMessage, PushNotification
 ---

@@ -86,7 +86,7 @@ things before its first hire and stops with the step to repeat if one is missing
 ## Update
 
 ```sh
-npx skills update
+npx skills update -g
 ```
 
 The links point into the installed skill, so the roles and the wrappers are new the moment

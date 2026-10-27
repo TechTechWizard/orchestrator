@@ -6,7 +6,7 @@
 #   BIN_DIR=/somewhere sh .../install.sh                   link into a different directory
 #
 # The wrappers and the roles ship inside the skill, so `npx skills add` brings them and
-# `npx skills update` replaces them. The links point at the installed skill through
+# `npx skills update -g` replaces them. The links point at the installed skill through
 # ~/.claude/skills/orchestrator, which npx skills fills for Claude Code whatever it does
 # underneath — a copy there, or a link to its copy in ~/.agents/skills, depending on its
 # version and on which agents the skill was installed for. That is why an update needs no
