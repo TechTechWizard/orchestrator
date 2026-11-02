@@ -98,6 +98,7 @@ lines = sys.stdin.read().splitlines()
 RULE = re.compile(r"^[^\S\n]*─{8,}")
 PROMPT = re.compile(r"^[^\S\n]*❯")
 FOOTER = re.compile(r"^[^\S\n]*[✻✽✶✳✢]")
+RECAP = re.compile(r"^[^\S\n]*※[^\S\n]*recap:")
 STATUS = re.compile(r"^[^\S\n]*(?:⏺[^\S\n]*)?СТАТУС:[^\S\n]*(ГОТОВО|ЖДУ РЕШЕНИЯ|БЛОКЕР)")
 
 # The input box is the last line starting with the prompt glyph that sits right under a
@@ -126,6 +127,19 @@ else:
     box_text = " ".join(x.strip() for x in body).strip()
     report = lines[:box - 1] if framed else lines[:box]
 pasted = "[pasted text" in (box_text if framed else "\n".join(lines)).lower()
+
+# Claude Code prints a session recap under a finished turn ("※ recap: …", wrapped onto
+# indented lines and closed by a blank line). The agent did not write it, and taken for the
+# last line of the report it hides the closing status line, so every recap block is cut out.
+kept, in_recap = [], False
+for line in report:
+    if RECAP.match(line):
+        in_recap = True
+    elif in_recap and (not line.strip() or FOOTER.match(line) or line.lstrip().startswith("⏺")):
+        in_recap = False
+    if not in_recap:
+        kept.append(line)
+report = kept
 
 # The closing line hire.md demands: the last line of the report that is not blank and not
 # the turn footer Claude Code prints under it (the "✻ Crunched for 2m 32s" line).
