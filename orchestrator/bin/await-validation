@@ -2,7 +2,7 @@
 # await-validation — wait until something lands on you for validation or review, then say what.
 #
 #   await-validation --project <group/repo> [--project ...] [--label VALIDATION]
-#                    [--env development] [--interval 900] [--state <file>]
+#                    [--env development] [--interval 10800] [--state <file>]
 #   await-validation ... --dry-run      one scan, print every item and its state, write nothing
 #   await-validation -h | --help
 #
@@ -31,7 +31,7 @@ set -u  # no -e: GitLab failures are counted by api(), an empty jq result is not
 
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
-projects=""; label="VALIDATION"; env="development"; interval=900
+projects=""; label="VALIDATION"; env="development"; interval=10800
 state=".orchestrator/validation-seen"; dry=0
 
 while [ $# -gt 0 ]; do

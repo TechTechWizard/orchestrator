@@ -107,8 +107,9 @@ the orchestrator every session, with the reasons. Nothing breaks without it.
 Tell the orchestrator «следи» (or "watch my queue") in a project's root, and whatever is
 assigned to you for validation or review gets an agent without you asking: issues with the
 status label once their merge is deployed, and open merge requests. The waiting is done by
-`await-validation`, which polls GitLab every 15 minutes and costs nothing while the queue is
-empty; the session has to stay open, because the watcher lives in it. GitLab only —
+`await-validation`, which polls GitLab every three hours (`--interval <seconds>` changes it)
+and costs nothing while the queue is empty; the session has to stay open, because the watcher
+lives in it. GitLab only —
 validation statuses in ClickUp are not supported and will not be.
 
 Set it up once per project in `<project>/.agents/standards/orchestrator.md`: the command with
