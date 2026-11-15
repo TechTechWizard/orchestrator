@@ -203,8 +203,9 @@ await-validation --project <group/repo> [--project ...] [--label VALIDATION] [--
 
 The projects, the status label and the environment come from the project's slot file
 `orchestrator`; when it names none, ask the lead once which repositories to watch. Run it
-detached with `run_in_background` — it polls GitLab every 15 minutes for free and exits on the
-first scan that finds something new, printing every new item at once:
+detached with `run_in_background` — it polls GitLab every three hours for free (`--interval
+<seconds>` overrides it) and exits on the first scan that finds something new, printing every
+new item at once:
 
 - `VALIDATE <project> #<iid> <url> <title>` — an issue with the status label assigned to the
   lead, already deployed to the environment. Hire `tester` on the environment, not on a local
